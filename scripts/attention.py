@@ -61,7 +61,7 @@ def main_forward(module,x,context,mask,divide,isvanilla = False,userpp = False,t
 
     global pmaskshw,pmasks
 
-    if inhr and not hiresfinished: hiresscaler(height,width,attn)
+    if inhr and not hiresfinished: hiresscaler(height,width,attn,h)
 
     if userpp and step > 0:
         for b in range(attn.shape[0] // 8):
@@ -521,9 +521,12 @@ def reset_pmasks(self): # init parameters in every batch
     self.rebacked = False
 
 def savepmasks(self,processed):
-    for mask ,th in zip(pmasks.values(),self.th):
-        img, _ , _= makepmask(mask, self.h, self.w,th, self.step)
-        processed.images.append(img)
+    for mask ,th, ths, thd in zip(pmasks.values(),self.th, self.thstep, self.thdecrease):
+        try:
+            img, _ , _= makepmask(mask, self.h, self.w,th, self.step, bratio = 1, ths = ths, thd = thd, in_hr = self.in_hr, no_hr_step = self.no_hr_step)
+            processed.images.append(img)
+        except RuntimeError as e:
+            print(e,", stop mask output")    
     return processed
 
 def hiresscaler(new_h,new_w,attn, head):
@@ -554,8 +557,20 @@ def hiresmask(masks,oh,ow,nh,nw,head,at = None,i = None):
         else:
             masks[key][i] = mask
 
-def makepmask(mask, h, w, th, step, bratio = 1): # make masks from attention cache return [for preview, for attention, for Latent]
-    th = th - step * 0.005
+def makepmask(mask, h, w, th, step, bratio = 1, ths = -1, thd = None, in_hr = None, no_hr_step = None): # make masks from attention cache return [for preview, for attention, for Latent]
+    if thd == None or in_hr == None or no_hr_step == None:
+        th = th - step * 0.005
+    else:
+        if not in_hr:
+            if step >= ths:
+                th = th - step * thd
+            else:
+                th = 2.0
+        else:
+            if step + no_hr_step >= ths:
+                th = th - (no_hr_step - 2) * thd
+            else:
+                th = 2.0
     bratio = 1 - bratio
     mask = torch.mean(mask,dim=0)
     mask = mask / mask.max().item()

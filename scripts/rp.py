@@ -29,6 +29,7 @@ from scripts.regions import (MAXCOLREG, IDIM, KEYBRK, KEYBASE, KEYCOMM, KEYPROMP
                              create_canvas, draw_region, #detect_mask, detect_polygons,  
                              draw_image, save_mask, load_mask, changecs,
                              floatdef, inpaintmaskdealer, makeimgtmp, matrixdealer)
+from scripts.regions import KEYBRKORIGIN
 
 KEYBRK_R = "RP_TEMP_REPLACE"
 FLJSON = "regional_prompter_presets.json"
@@ -211,6 +212,7 @@ class Script(modules.scripts.Script):
         self.hr_w = 0
         self.hr_h = 0
         self.in_hr = False
+        self.no_hr_step=0
         self.xsize = 0
         self.imgcount = 0
         # for latent mode
@@ -422,6 +424,10 @@ class Script(modules.scripts.Script):
                     p.all_prompts = p.all_prompts_rps
                 if hasattr(p,"threshold"):
                     if p.threshold is not None:threshold = str(p.threshold)
+                if hasattr(p,"thstep"):
+                    self.thstep = p.thstep
+                if hasattr(p,"thdecrease"):
+                    self.thdecrease = p.thdecrease
         else:
             diff = False
 
@@ -482,6 +488,11 @@ class Script(modules.scripts.Script):
                 self.hr_w = self.hr_w - self.hr_w % ATTNSCALE
     
         loraverchekcer(self)                                                  #check web-ui version
+        if not self.optbreak and not self.diff: allchanger(p,KEYBRKORIGIN,KEYBRK)
+        if self.diff:
+            self.optbreak = False
+            self.calc = "Attention"
+        self.no_hr_step = p.steps
         if OPTAND not in options: allchanger(p, "AND", KEYBRK)                                          #Change AND to BREAK
         if any(x in self.mode for x in ["Ver","Hor"]) and not self.optbreak:
             keyconverter(aratios, self.mode, usecom, usebase, p) #convert BREAKs to ADDROMM/ADDCOL/ADDROW
@@ -761,6 +772,9 @@ def thresholddealer(self, p ,threshold):
             threshold.append(threshold[0])
         self.th = [floatdef(t, 0.4) for t in threshold] * self.batch_size
         if self.debug :print ("threshold", self.th)
+        if self.diff == False:
+            self.thstep = [-1] * len(self.pe)
+            self.thdecrease = [None] * len(self.pe)
 
 def bratioprompt(self, bratios):
     if not "Pro" in self.mode: return self
@@ -1136,8 +1150,8 @@ def keyreplacer(self,p):
 
 def keycounter(self, p):
     keys = ALLALLKEYS.copy()
-    if self.optbreak:
-        keys.remove(KEYBRK)
+    if self.optbreak or self.diff:
+        keys.remove(KEYBRKORIGIN)
     pc = sum([p.prompt.count(text) for text in keys])
     npc = sum([p.negative_prompt.count(text) for text in keys])
     self.divide = [pc + 1, npc + 1]

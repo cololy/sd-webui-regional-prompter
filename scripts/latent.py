@@ -90,9 +90,9 @@ def denoiser_callback_s(self, params: CFGDenoiserParams):
 
                 allmask = []
                 basemask = None
-                for t, th, bratio in zip(self.pe, self.th, self.bratios):
+                for t, th, bratio, ths, thd in zip(self.pe, self.th, self.bratios, self.thstep, self.thdecrease):
                     key = f"{t}-{b}"
-                    _, _, mask = att.makepmask(att.pmasks[key], params.x.shape[2], params.x.shape[3], th, self.step, bratio = bratio)
+                    _, _, mask = att.makepmask(att.pmasks[key], params.x.shape[2], params.x.shape[3], th, self.step, bratio = bratio, ths = ths, thd = thd, in_hr = self.in_hr, no_hr_step = self.no_hr_step)
                     mask = mask.repeat(params.x.shape[1],1,1)
                     basemask = 1 - mask if basemask is None else basemask - mask
                     if self.ex:
@@ -109,13 +109,13 @@ def denoiser_callback_s(self, params: CFGDenoiserParams):
                 self.filters.extend(allmask)
             att.maskready = True
 
-            for t, th, bratio in zip(self.pe, self.th, self.bratios):
+            for t, th, bratio, ths, thd in zip(self.pe, self.th, self.bratios, self.thstep, self.thdecrease):
                 allmask = []
                 for hw in att.pmaskshw:
                     masks = None
                     for b in range(self.batch_size):
                         key = f"{t}-{b}"
-                        _, mask, _ = att.makepmask(att.pmasks[key], hw[0], hw[1], th, self.step, bratio = bratio)
+                        _, mask, _ = att.makepmask(att.pmasks[key], hw[0], hw[1], th, self.step, bratio = bratio, ths = ths, thd = thd, in_hr = self.in_hr, no_hr_step = self.no_hr_step)
                         mask = mask.unsqueeze(0).unsqueeze(-1)
                         masks = mask if b ==0 else torch.cat((masks,mask),dim=0)
                     allmask.append(mask)     
@@ -211,12 +211,14 @@ def denoised_callback_s(self, params: CFGDenoisedParams):
                 return
             else:
                 for b in range(batch):
-                    for a in range(areas) :
+                    filall=0
+                    for a in range(0,len(self.filters)-1) :
                         fil = self.filters[a+1]
+                        filall=filall+fil
                         orig = self.rps.latent if self.rps.latent.shape[2:] == x.shape[2:] else self.rps.latent_hr
                         if self.debug : print(f"x = {x.size()}i = {a + b*areas}, j = {b + a*batch}, cond = {a + b*areas},filsum = {fil if type(fil) is int else torch.sum(fil)}, uncon = {x.size()[0]+(b-batch)}")
                         #print("1",type(self.rps.latent),type(fil))
-                        x[:,:,:,:] =  orig[:,:,:,:] * (1 - fil) + x[:,:,:,:] * fil
+                    x[:,:,:,:] =  orig[:,:,:,:] * (1 - filall) + x[:,:,:,:] * filall
 
     #if params.total_sampling_steps - 7 == params.sampling_step + 2:
     if att.maskready:
@@ -225,24 +227,28 @@ def denoised_callback_s(self, params: CFGDenoisedParams):
                 if self.rps.latent.shape[2:] != x.shape[2:]:
                     if self.rps.latent_hr is None: return
                 for b in range(batch):
-                    for a in range(areas) :
+                    filall=0
+                    for a in range(0,len(self.filters)-1) :
                         fil = self.filters[a+1]
+                        filall=filall+fil
                         orig = self.rps.latent if self.rps.latent.shape[2:] == x.shape[2:] else self.rps.latent_hr
                         if self.debug : print(f"x = {x.size()}i = {a + b*areas}, j = {b + a*batch}, cond = {a + b*areas},filsum = {fil if type(fil) is int else torch.sum(fil)}, uncon = {x.size()[0]+(b-batch)}")
                         #print("2",type(self.rps.latent),type(fil))
-                        x[:,:,:,:] =  orig[:,:,:,:] * (1 - fil) + x[:,:,:,:] * fil
+                    x[:,:,:,:] =  orig[:,:,:,:] * (1 - filall) + x[:,:,:,:] * filall
 
     if params.sampling_step == 0 and self.in_hr:
         if self.rps is not None and self.diff:
             if self.rps.latent is not None:
                 if self.rps.latent.shape[2:] != x.shape[2:] and self.rps.latent_hr is None: return
                 for b in range(batch):
-                    for a in range(areas) :
+                    filall=0
+                    for a in range(0,len(self.filters)-1) :
                         fil = self.filters[a+1]
+                        filall=filall+fil
                         orig = self.rps.latent if self.rps.latent.shape[2:] == x.shape[2:] else self.rps.latent_hr
                         if self.debug : print(f"x = {x.size()}i = {a + b*areas}, j = {b + a*batch}, cond = {a + b*areas},filsum = {fil if type(fil) is int else torch.sum(fil)}, uncon = {x.size()[0]+(b-batch)}")
                         #print("3",type(self.rps.latent),type(fil))
-                        x[:,:,:,:] =  orig[:,:,:,:] * (1 - fil) + x[:,:,:,:] * fil
+                    x[:,:,:,:] =  orig[:,:,:,:] * (1 - filall) + x[:,:,:,:] * filall
 
 ######################################################
 ##### Latent Method
