@@ -213,3 +213,14 @@ stepの設定値は小数に変換されますが、直接Prompt Edittingの書�
 
 ### Prompt Edittingのトークン数
 Prompt Editting使用時に75トークンの閾値をまたぐと画像がおかしくなることがあります。トークン数を揃えておくのが無難です。もしくは適宜BREAKを入れると良いです。
+
+***
+
+## 不具合情報
+- 変更したい領域のプロンプトより前にあるプロンプトが以下の状態だと、領域計算がおかしくなる。後ろにある分には問題ない
+  - NegPiPのマイナスプロンプトが入っている　
+  - BREAKが入っている　(何ワードかずれた所にあるプロンプトで領域計算されてしまう)
+  - 75トークンを超えている　(何ワードかずれた所にあるプロンプトで領域計算されてしまう)
+- SDXLで1倍より大きくhiresをするとエラーになる
+- All perf improvements bundleを入れて--precision half付きで起動するとエラーになる
+- NegPiPがfp8でエラーになる ※[fork版](https://github.com/SLAPaper/sd-webui-negpip)で解消
